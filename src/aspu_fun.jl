@@ -1,4 +1,4 @@
-
+#fast spu(gamma)
 function getspu!(spu, pows, z, n)
   for i in eachindex(pows)
     @inbounds pows[i] < 9 && (spu[i] = z[1]^(pows[i]))
@@ -21,7 +21,7 @@ function getspu(pows::Array{Int64, 1}, z::Vector{T}, n::Int64) where {T<:Real}
   tmpspu
 end
 
-
+#get highest SPU(gamma) rank across gamma
 function rank_spus!(rnk::AbstractArray{Int64, 2}, zb::Array{T,2}, B = size(zb, 2)) where {T<:Real}
   rnk1_v = view(rnk,1,1:B)
   for i in 1:B
@@ -46,43 +46,6 @@ function rank_spus!(rnk::AbstractArray{Int64, 2}, zb::Array{T,2}, B = size(zb, 2
   0
 end
 
-
-function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
-    spu = getspu(pows, z, length(z))
-    minp = 0.0
-    minp_f = 0.0
-    gamma = 0
-    pval = fill(0.0, size(allsorted[1],1))
-    pval2 = copy(pval)
-    ind_p = zeros(Float64, length(pows))
-    pval_f = fill(0.0, size(allsorted[1],1))
-    aspu_p = 1
-    i = 0
-    B = maxin[1]
-    while minp_f < 0.085 && i < length(allsorted)
-        i += 1
-        for k in eachindex(pows)
-            @inbounds pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] ) + 1
-            pval_f[k] < 0.085 && (pval2[k] = pval[k])
-        end
-        minp, gamma = findmin(pval)
-        pval_f = pval ./ (B + 1)
-        minp_f = (minp)/(B + 1)
-        for k in eachindex(ind_p)
-            (ind_p[k] == 0 && pval_f[k] > 0.085) && (ind_p[k] = i)
-        end
-    end
-    for j in allranks[i][2,:]
-        @inbounds (maxin[i] - j + 1)/B < minp_f && (aspu_p += 1)
-    end
-    for k in eachindex(ind_p)
-        ind_p[k] > 0 && (pval2[k] /= 10^(ind_p[k]-1)*B)
-        ind_p[k] == 0 && (pval2[k] /= 10^(i-1)*B)
-    end
-
-    # aspu_p/(B+1)/10^(i-1), minp_f/10^(i-1), pval, pval_f, gamma, ind_p
-    aspu_p/(B+1)/10^(i-1), pval2, gamma
-end
 
 
 function init_aspu(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(mvn),length(mvn)))
@@ -123,6 +86,44 @@ function init_aspu(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(m
     allranks_f = [ ((1 + maxin[i]) .- allranks[i][2,:])./maxin[i] for i in eachindex(allvals)]
     # allsorted, allsorted_rank, allranks_f, allranks, maxin_arr, maxin
     allsorted, allranks, maxin_arr, maxin
+end
+
+
+function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
+    spu = getspu(pows, z, length(z))
+    minp = 0.0
+    minp_f = 0.0
+    gamma = 0
+    pval = fill(0.0, size(allsorted[1],1))
+    pval2 = copy(pval)
+    ind_p = zeros(Float64, length(pows))
+    pval_f = fill(0.0, size(allsorted[1],1))
+    aspu_p = 1
+    i = 0
+    B = maxin[1]
+    while minp_f < 0.085 && i < length(allsorted)
+        i += 1
+        for k in eachindex(pows)
+            @inbounds pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] ) + 1
+            pval_f[k] < 0.085 && (pval2[k] = pval[k])
+        end
+        minp, gamma = findmin(pval)
+        pval_f = pval ./ (B + 1)
+        minp_f = (minp)/(B + 1)
+        for k in eachindex(ind_p)
+            (ind_p[k] == 0 && pval_f[k] > 0.085) && (ind_p[k] = i)
+        end
+    end
+    for j in allranks[i][2,:]
+        @inbounds (maxin[i] - j + 1)/B < minp_f && (aspu_p += 1)
+    end
+    for k in eachindex(ind_p)
+        ind_p[k] > 0 && (pval2[k] /= 10^(ind_p[k]-1)*B)
+        ind_p[k] == 0 && (pval2[k] /= 10^(i-1)*B)
+    end
+
+    # aspu_p/(B+1)/10^(i-1), minp_f/10^(i-1), pval, pval_f, gamma, ind_p
+    aspu_p/(B+1)/10^(i-1), pval2, gamma
 end
 
 function aspu(
