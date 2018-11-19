@@ -55,7 +55,7 @@ function init_aspu(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(m
     ranspu = zeros(length(pows), ntest)
     tmp = zeros(length(pows))
 
-    allvals = [zeros(max(ntraits, length(pows)), ntest*10) for i in 0:ceil(log10(maxiter/ntest))]
+    allvals = [zeros(length(pows), ntest*10) for i in 0:ceil(log10(maxiter/ntest))]
 
     #fill first bucket
     rand!(mvn, ran)
