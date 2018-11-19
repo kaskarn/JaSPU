@@ -1,5 +1,5 @@
 #computes X Xt without loading file in memory
-function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip = 1, header = true, kwargs...)
+function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip = 1, header = true)
     f = open(filename, "r")
     xlen = length(split(readline(f), delim)) - skip
     header || seek(f, 0)
@@ -8,7 +8,7 @@ function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip 
     ztresh = abs(quantile(Normal(0,1), plim/2))
 
     for line in eachline(f)
-        lp = parse.(Float64, split(line, '\t')[2:end])
+        lp = parse.(Float64, split(line, delim)[2:end])
         if maximum(abs.(lp)) > ztresh
             s += 1
             continue
@@ -31,7 +31,7 @@ function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip 
 end
 
 #compute cov(X) and cor(X) without loading file in memory
-function cor_io(filename::AbstractString; delim::Char = '\t', covfile="", kwargs...)
+function cor_io(filename::AbstractString; delim::Char = '\t', covfile="")
     covfile=="" || return readdlm(open(covfile,"r"), delim)
     xxt, n, s = xxt_io(filename; kwargs...)
     Σ = xxt ./ n
