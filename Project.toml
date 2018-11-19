@@ -1,0 +1,15 @@
+name = "JaSPU"
+uuid = "7519d730-eb57-11e8-2bd7-b5490eb77740"
+authors = ["Antoine Baldassari <baldassarian@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+julia = "^1.0"
