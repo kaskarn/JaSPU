@@ -130,7 +130,7 @@ function aspu(
     filename, outfile=""; covfile="", maxiter=Int(1e7), ntest=Int(1e4), pows=[1, 2, 9],
     plim = 1e-5, header = true, skip = 1, invcor=false, delim = '\t'
     )
-    Σ, R = cor_io(filename; delim = delim)
+    Σ = cor_io(filename; delim = delim)
     mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
     trans = invcor ? inv(Σ) : one(Σ)
     ntraits = length(mvn)
