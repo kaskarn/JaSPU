@@ -1,5 +1,6 @@
 #computes X Xt without loading file in memory
 function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip = 1, header = true)
+    print(delim)
     f = open(filename, "r")
     xlen = length(split(readline(f), delim)) - skip
     header || seek(f, 0)
