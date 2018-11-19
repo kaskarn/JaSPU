@@ -33,7 +33,7 @@ end
 #compute cov(X) and cor(X) without loading file in memory
 function cor_io(filename::AbstractString; delim::Char = '\t', covfile="")
     covfile=="" || return readdlm(open(covfile,"r"), delim)
-    xxt, n, s = xxt_io(filename; kwargs...)
+    xxt, n, s = xxt_io(filename; delim=delim)
     Σ = xxt ./ n
     R = Σ * inv(Diagonal(Σ))
 
