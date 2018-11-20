@@ -4,30 +4,6 @@ passarg(sym::Symbol, uid::Array{Int,1}) = [ passarg(sym, i) for i in uid ]
 passarg(sym::Array{Symbol, 1}, uid::Any) = [ passarg(i, uid) for i in sym ]
 passarg(sym::Any) = passarg(sym, procs()[2:end])
 
-#add values exceeding threshold to array
-function create_arref!(ranvals, tmp, ntest, maxiter, mvn, spu_th, allvals, k, pows)
-    fullchunks = floor(Int, maxiter/ntest)
-    lastchunk = Int(maxiter - ntest*fullchunks)
-    n = 0
-    narr = zeros(Int, length(pows))
-    np = length(pows)
-    for chunk in 1:fullchunks
-        rand!(mvn, ranvals)
-        for i in 1:ntest
-            getspu!(tmp, pows, ranvals[:,i], length(mvn))
-            topind = tmp .> spu_th
-            for p in eachindex(pows)[topind]
-                narr[p] += 1
-            end
-            if sum(topind) > 0
-                n += 1
-                allvals[k][:, n] = tmp
-            end
-        end
-    end
-    n, narr
-end
-
 #sorting functions for rank_spus
 function InsertionSort!(A::AbstractArray{T, 1}, order::AbstractArray{Int64, 1}, ii=1, jj=length(A)) where {T<:Real}
     for i = ii+1 : jj

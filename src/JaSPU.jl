@@ -9,8 +9,8 @@ using LinearAlgebra
 
 export
     cor_io,
-    aspu,
-    passarg
+    xxt_io,
+    aspu
 
 include("utils.jl")
 include("covmat.jl")
