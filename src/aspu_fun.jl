@@ -102,13 +102,7 @@ function do_initwork(jobs, results)
         put!(results, out)
     end
 end
-function do_aspuwork(jobs, results)
-    while true
-        z = take!(jobs)
-        out = getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
-        put!(results, out)
-    end
-end
+
 function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(mvn),length(mvn)))
     maxchunks = Int(maxiter/ntest)
     #for parallel
@@ -245,33 +239,81 @@ function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
     aspu_p/(B+1)/10^(i-1), pval2, gamma
 end
 
+function do_aspuwork(vars, jobs, results)
+    allsorted, allranks, maxin_arr, maxin, pows, delim, trans = take!(vars)
+    while true
+        line = take!(jobs)
+        ls = split(line, delim)
+        z = trans*parse.(Float64, ls[2:end])
+        out = getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
+        put!(results, (ls, out))
+    end
+end
+
 function aspu(
     filename, outfile=""; covfile="", maxiter=Int(1e7), ntest=Int(1e4), pows=collect(1:9),
-    plim = 1e-5, header = true, skip = 1, invcor=false, delim = '\t', outtest=Inf
+    plim = 1e-5, header = true, skip = 1, invcor=false, delim = '\t', outtest=Inf, verbose = true
     )
-    Σ = cor_io(filename; delim = delim)
+    Σ = cov_io(filename; delim = delim)
     mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
+    trans = invcor ? inv(Σ) : one(Σ)
     ntraits = length(mvn)
 
+    verbose && begin
+        println("Covariance matrix computed")
+        display(Σ)
+    end
+
     # allsorted, allranks, maxin_arr, maxin = init_aspu(pows, mvn, ntest, maxiter)
-    nworkers() == 1 && addprocs(1)
     allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest, maxiter)
+    verbose && println("\nSimulations initialized")
+
     fout = outfile == "" ? stdout : open(outfile, "w")
     f = open(filename, "r")
 
-    #assumes header
+    #assumes data have header
     write(fout, readline(f))
     write(fout, delim)
     join(fout, vcat("aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma"), delim)
     write(fout, '\n')
 
-    for (n, line) in enumerate(eachline(f))
-        n > outtest && break
-        ls = split(line, delim)
-        z = parse.(Float64, ls[2:end])
-        aspu_out = getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
-        join(fout, vcat(ls, aspu_out..., '\n'), delim, "")
+    #for parallel
+    buffer_s = min(10*nworkers(), outtest)
+    jobs = RemoteChannel(()->Channel{String}(buffer_s));
+    results = RemoteChannel(()->Channel{Any}(buffer_s));
+    vars = RemoteChannel(()->Channel{Any}(length(workers())))
+
+    for p in workers()
+        put!(vars, (allsorted, allranks, maxin_arr, maxin, pows, delim, trans))
+        remote_do(do_aspuwork, p, vars, jobs, results)
     end
+
+    verbose && println("Processing file...")
+    #start jobs
+    buffer_n = 0
+    for i in 1:buffer_s
+        line = readline(f)
+        eof(f) && break
+        put!(jobs, line)
+        buffer_n += 1
+    end
+
+    #cycle through input file
+    outtest2 = outtest - length(buffer_s)
+    for (n, line) in enumerate(eachline(f))
+        n > outtest2 && break
+        put!(jobs, line)
+        out = take!(results)
+        join(fout, vcat(out[1], out[2]..., '\n'), delim, "")
+    end
+
+    #clear out buffer
+    for i in 1:buffer_n
+        out = take!(results)
+        join(fout, vcat(out[1], out[2]..., '\n'), delim, "")
+    end
+
+    #close files
     close(fout)
     close(f)
 end

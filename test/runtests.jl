@@ -1,6 +1,6 @@
 println("Testing...")
 using Distributed
-addprocs()
+# addprocs()
 
 # @everywhere begin
 #     using JaSPU
@@ -14,10 +14,10 @@ addprocs()
 @everywhere using JaSPU
 
 # @time aspu("data/smalldat", "data/tmpsmall"; maxiter=Int(1e5))
-aspu("data/testdat", "data/tmptest"; maxiter=Int(1e5), outtest = 10)
-@time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e5), outtest = 10)
-@time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e6), outtest = 10)
-@time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e7), outtest = 10)
+@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e4))
+@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e5), verbose = false)
+@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e6), verbose = false)
+@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e7), verbose = false)
 # @time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e8), outtest = 10) #82 sec
 # @time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e9), outtest = 10) #800sec
 # @time aspu("data/smalldat", "data/tmpsmall"; maxiter=Int(1e5))

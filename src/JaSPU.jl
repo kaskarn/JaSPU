@@ -8,7 +8,7 @@ using Random
 using LinearAlgebra
 
 export
-    cor_io,
+    cov_io,
     xxt_io,
     aspu
 

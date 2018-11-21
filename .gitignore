@@ -1,2 +1,7 @@
 
 testf.jl
+test/data/tmpout
+test/data/partest
+test/data/tmpsmall
+test/data/tmptest
+test/runtests.jl
