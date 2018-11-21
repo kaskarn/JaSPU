@@ -32,9 +32,9 @@ function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip 
 end
 
 #compute cov(X) from sums of squares computed with xxt() -- without loading file in memory
-function cov_io(filename::AbstractString; delim::Char = '\t', covfile="")
+function cov_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', covfile="", skip = 1)
     covfile=="" || return readdlm(open(covfile,"r"), delim)
-    xxt, tot, n, s = xxt_io(filename; delim=delim)
+    xxt, tot, n, s = xxt_io(filename; plim = plim, delim=delim, skip = skip)
     μ = tot./n
     Σ = (xxt .- μ*tot' .- tot*μ' .+  n*μ*μ')/(n-1)
 end

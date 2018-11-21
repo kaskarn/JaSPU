@@ -2,7 +2,6 @@ module JaSPU
 
 using Distributions
 using Distributed
-using CSV
 using DelimitedFiles
 using Random
 using LinearAlgebra

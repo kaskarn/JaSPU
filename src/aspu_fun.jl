@@ -190,12 +190,14 @@ function do_aspuwork(vars, jobs, results)
 end
 
 function aspu(
-    filename, outfile=string("aspu_results_", basename(filename));
+    filename,
+    outfile="make";
     covfile="", delim = '\t',
     pows = collect(0:8), invcor=false, plim = 1e-5,
     maxiter = Int(1e7), ntest = Int(1e4),
     header = true, skip = 1,
-    outtest=Inf, verbose = true
+    outtest=Inf, verbose = true,
+    savecov = true
     )
 
     Σ = cov_io(filename; delim = delim)
@@ -213,6 +215,10 @@ function aspu(
     verbose && println("\nSimulations initialized")
 
     #Open input and output files
+    outfile == "make" && (outfile = string(dirname(filename), "/aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
+    outcov = string(dirname(filename), "/aspu_z_covariance_", basename(filename))
+    writedlm(outcov, Σ, '\t')
+    
     fout = outfile == "" ? stdout : open(outfile, "w")
     f = open(filename, "r")
 
