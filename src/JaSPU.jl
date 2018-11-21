@@ -9,7 +9,6 @@ using LinearAlgebra
 
 export
     cov_io,
-    xxt_io,
     aspu
 
 include("utils.jl")

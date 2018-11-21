@@ -15,9 +15,9 @@ using Distributed
 
 # @time aspu("data/smalldat", "data/tmpsmall"; maxiter=Int(1e5))
 @time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e4))
-@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e5), verbose = false)
+@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e5), verbose = false, plim = 1e-4)
 @time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e6), verbose = false)
-@time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e7), verbose = false)
+# @time aspu("data/smalldat", "data/tmptest"; maxiter=Int(1e7), verbose = false)
 # @time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e8), outtest = 10) #82 sec
 # @time aspu("data/testdat", "data/tmptest"; maxiter=Int(1e9), outtest = 10) #800sec
 # @time aspu("data/smalldat", "data/tmpsmall"; maxiter=Int(1e5))

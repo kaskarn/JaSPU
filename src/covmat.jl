@@ -8,7 +8,7 @@ function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip 
     n, s = 0, 0, 0
     ztresh = abs(quantile(Normal(0,1), plim/2))
     for line in eachline(f)
-        lp = parse.(Float64, split(line, delim)[2:end])
+        lp = parse.(Float64, split(line, delim)[(1+skip):end])
         if maximum(abs.(lp)) > ztresh
             s += 1
             continue
@@ -31,11 +31,10 @@ function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip 
     xxt, tot, n, s
 end
 
-#compute cov(X) and cor(X) without loading file in memory
+#compute cov(X) from sums of squares computed with xxt() -- without loading file in memory
 function cov_io(filename::AbstractString; delim::Char = '\t', covfile="")
     covfile=="" || return readdlm(open(covfile,"r"), delim)
     xxt, tot, n, s = xxt_io(filename; delim=delim)
     μ = tot./n
     Σ = (xxt .- μ*tot' .- tot*μ' .+  n*μ*μ')/(n-1)
-    Σ
 end

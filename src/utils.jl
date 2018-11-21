@@ -1,9 +1,3 @@
-#functions to pass objects in Global environment to workers
-passarg(sym::Symbol, uid::Int) = remotecall_fetch((x,v) -> eval(:($x = $v)), uid, sym, eval(sym))
-passarg(sym::Symbol, uid::Array{Int,1}) = [ passarg(sym, i) for i in uid ]
-passarg(sym::Array{Symbol, 1}, uid::Int) = [ passarg(i, uid) for i in sym ]
-passarg(sym::Any) = [ passarg(sym, uid) for uid in workers() ]
-
 #sorting functions for rank_spus
 function InsertionSort!(A::AbstractArray{T, 1}, order::AbstractArray{Int64, 1}, ii=1, jj=length(A)) where {T<:Real}
     for i = ii+1 : jj
