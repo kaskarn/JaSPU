@@ -1,19 +1,42 @@
-#returns SPU(gamma) for all gammas. Very fast
+#returns SPU(gamma) for all gammas. fast
 function getspu!(spu, pows, z, n)
-  for i in eachindex(pows)
-    @inbounds pows[i] < 0 && (spu[i] = z[1]^(pows[i]))
-    @inbounds pows[i] == 0 && (spu[i] = abs(z[1]))
+  @inbounds for i in eachindex(pows)
+    @fastmath pows[i] != 0 && (spu[i] = z[1]^(pows[i]))
+    pows[i] == 0 && (spu[i] = abs(z[1]))
   end
-  for j = 2:n
+  @inbounds for j = 2:n
     for i in eachindex(pows)
-      @inbounds (pows[i] < 0) && (spu[i] += z[j]^(pows[i]))
-      @inbounds (pows[i] == 0) && (abs(z[j]) > spu[i]) && (spu[i] = abs(z[j]))
+      @fastmath (pows[i] != 0) && (spu[i] += z[j]^(pows[i]))
+      (pows[i] == 0) && (abs(z[j]) > spu[i]) && (spu[i] = abs(z[j]))
     end
   end
-  for i = eachindex(pows)
-    @inbounds spu[i] = abs(spu[i])
+  @inbounds for i = eachindex(pows)
+    spu[i] = abs(spu[i])
   end
 end
+
+
+# function getspu2!(spu, pows, z, n)
+#     notinf = eachindex(pows)[[x!=0 for x in pows]]
+#     inf_a = view(spu, eachindex(pows)[[x==0 for x in pows]])
+#     inf_n = length(inf_a)
+#
+#     copyto!(inf_a, 1, z, 1, inf_n)
+#
+#     for i in notinf
+#         @inbounds spu[i] = z[1]^(pows[i])
+#     end
+#     for j in 2:n
+#         for i in notinf
+#             @inbounds spu[i] += z[j]^(pows[i])
+#         end
+#         (-inf_a[1] < z[j] < inf_a[1]) || (copyto!(inf_a, 1, z, j, inf_n))
+#     end
+#     for i in eachindex(spu)
+#         @inbounds spu[i] = abs(spu[i])
+#     end
+# end
+
 
 function getspu(pows::Array{Int64, 1}, z::Vector{T}, n::Int64) where {T<:Real}
   tmpspu = Array{T}(undef, length(pows))
