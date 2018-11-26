@@ -103,7 +103,7 @@ function do_initwork(jobs, results)
     end
 end
 
-function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(mvn),length(mvn)))
+function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(mvn),length(mvn)), verbose = true)
 
     maxchunks = Int(maxiter/ntest)
     ntraits = length(mvn)
@@ -117,12 +117,13 @@ function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,leng
     results = RemoteChannel(()->Channel{Any}(maxchunks))
     for p in workers()
       remote_do(do_initwork, p, jobs, results)
-    end;
+    end
 
     #big data structure to hold simulations
     allvals = [zeros(length(pows), ntest*10) for i in 1:ceil(Int, 1+log10(maxiter/ntest))]
 
     #fill first bucket to the brim
+    verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(ntest)))")
     ran = rand(mvn, ntest)
     for i in 1:ntest
         getspu!(view(allvals[1],:,i), pows, ran[:,i], ntraits)
@@ -132,6 +133,7 @@ function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,leng
 
     #pass each bucket of values to workers
     for i in eachindex(allvals)[2:end]
+        verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(ntest))+i-1)")
         iternow = ntest*10^(i-1)
         thresh = [partialsort(view(allvals[i-1],j,:), Int(ntest*0.10); rev = true) for j in eachindex(pows)]
         fullchunks = floor(Int, iternow/ntest)
@@ -196,29 +198,35 @@ function aspu(
     pows = collect(0:8), invcor=false, plim = 1e-5,
     maxiter = Int(1e7), ntest = Int(1e4),
     header = true, skip = 1,
-    outtest=Inf, verbose = true,
+    outtest = Inf, verbose = true,
     savecov = true
     )
 
     Σ = cov_io(filename; delim = delim)
-    mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
-    trans = invcor ? inv(Σ) : one(Σ)
-    ntraits = length(mvn)
+    R = sqrt.(inv(Diagonal(Σ))) * Σ * sqrt.(inv(Diagonal(Σ)))
 
-    verbose && begin
+    if verbose
         println("Covariance matrix computed")
-        display(Σ)
+        display(R)
+        println("")
     end
 
+    # mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
+    mvn = invcor ? MvNormal(inv(R)) : MvNormal(R)
+    # trans = invcor ? inv(Σ) : one(Σ)
+    trans = invcor ? inv(R) : one(R)
+    ntraits = length(mvn)
+
     #Run simulations, and store forever
-    allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest, maxiter)
-    verbose && println("\nSimulations initialized")
+    allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest, maxiter; verbose=verbose)
+    verbose && println_timestamp("Simulations initialized")
 
     #Open input and output files
     outfile == "make" && (outfile = string(dirname(filename), "/aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
-    outcov = string(dirname(filename), "/aspu_z_covariance_", basename(filename))
-    writedlm(outcov, Σ, '\t')
-    
+    outcov = string(dirname(outfile), "/aspu_z_covariance_", basename(filename))
+    # writedlm(outcov, Σ, '\t')
+    writedlm(outcov, R, '\t')
+
     fout = outfile == "" ? stdout : open(outfile, "w")
     f = open(filename, "r")
 
@@ -237,7 +245,7 @@ function aspu(
         remote_do(do_aspuwork, p, vars, jobs, results)
     end
 
-    verbose && println("Processing file...")
+    verbose && println_timestamp("Processing file...")
     #start jobs
     buffer_n = 0
     for i in 1:buffer_s
@@ -263,6 +271,7 @@ function aspu(
     end
 
     #close files
+    verbose && println_timestamp("All done.\n")
     close(fout)
     close(f)
 end

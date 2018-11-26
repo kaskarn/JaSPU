@@ -1,3 +1,12 @@
+#returns date and time
+dtnow() = Dates.format(now(), "Yud_HHhMM\\mSS\\s")
+function println_timestamp(io::IO, msg)
+    println(string(dtnow(),": ", msg))
+    flush(io)
+end
+println_timestamp(msg) = println_timestamp(stdout, msg)
+
+
 #sorting functions for rank_spus
 function InsertionSort!(A::AbstractArray{T, 1}, order::AbstractArray{Int64, 1}, ii=1, jj=length(A)) where {T<:Real}
     for i = ii+1 : jj
