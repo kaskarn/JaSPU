@@ -211,6 +211,9 @@ function aspu(
         println("")
     end
 
+    #default outfile value
+    outfile == "make" && (outfile = string("aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
+
     # mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
     mvn = invcor ? MvNormal(inv(R)) : MvNormal(R)
     # trans = invcor ? inv(Σ) : one(Σ)
@@ -222,9 +225,8 @@ function aspu(
     verbose && println_timestamp("Simulations initialized")
 
     #Open input and output files
-    outfile == "make" && (outfile = string(dirname(filename), "/aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
-    outcov = string(dirname(outfile), "/aspu_z_covariance_", basename(filename))
-    # writedlm(outcov, Σ, '\t')
+    outdir = dirname(realpath(outfile))
+    outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
     writedlm(outcov, R, '\t')
 
     fout = outfile == "" ? stdout : open(outfile, "w")
