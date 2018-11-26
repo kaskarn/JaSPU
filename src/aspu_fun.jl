@@ -152,7 +152,7 @@ function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,leng
     allranks = [ zeros(Int, 2, n) for n in maxin ]
 
     [ rank_spus!(allranks[i], allvals[i], maxin[i]) for i in eachindex(allvals) ]
-    allsorted = [ [ sort(allvals[i][g,:],rev=true)[1:maxin_arr[g,i]] for g in eachindex(pows) ] for i in eachindex(allvals) ]
+    allsorted = [ [ sort(allvals[i][g,:], rev=true)[1:maxin_arr[g,i]] for g in eachindex(pows) ] for i in eachindex(allvals) ]
 
     allsorted, allranks, maxin_arr, maxin
 end
@@ -192,45 +192,47 @@ function do_aspuwork(vars, jobs, results)
 end
 
 function aspu(
-    filename,
-    outfile="make";
+    filename, outfile="make";
     covfile="", delim = '\t',
-    pows = collect(0:8), invcor = false, plim = 1e-5,
-    maxiter = Int(1e7), ntest = Int(1e4),
+    pows = collect(0:8), invcor = false,
+    plim = 1e-4, maxiter = 1e7, ntest = 1e4,
     header = true, skip = 1,
-    outtest = Inf, verbose = true,
-    savecov = true
+    verbose = true, savecov = true,
+    outtest = Inf
     )
 
-    Σ = cov_io(filename; delim = delim)
+    maxiter_int = floor(Int, maxiter)
+    ntest_int = floor(Int, ntest)
+    # pows = collect(eval(Meta.parse(string(pows)))) #pows::ints for now
+
+    Σ = cov_io(filename; delim = delim, covfile = covfile)
     R0 = sqrt.(inv(Diagonal(Σ))) * Σ * sqrt.(inv(Diagonal(Σ)))
     R = convert(Matrix, Hermitian(R0))
 
     if verbose
         println("Covariance matrix computed")
-        display(R)
+        display(R0)
         println("")
     end
 
     #default outfile value
-    outfile == "make" && (outfile = string("aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
+    outfile == "make" && (outfile = string("aspu_results_1e", ceil(Int, log10(maxiter_int)), "_", basename(filename)))
 
     #Open input and output files
     outdir = dirname(abspath(outfile))
     outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
-    writedlm(outcov, R, '\t')
+    savecov && ( writedlm(outcov, R0, '\t') )
 
     fout = outfile == "" ? stdout : open(outfile, "w")
     f = open(filename, "r")
 
     # mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
     mvn = invcor ? MvNormal(inv(R)) : MvNormal(R)
-    # trans = invcor ? inv(Σ) : one(Σ)
     trans = invcor ? inv(R) : one(R)
     ntraits = length(mvn)
 
     #Run simulations, and store forever
-    allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest, maxiter; verbose=verbose)
+    allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest_int, maxiter_int; verbose=verbose)
     verbose && println_timestamp("Simulations initialized")
 
     #write header
@@ -248,8 +250,8 @@ function aspu(
         remote_do(do_aspuwork, p, vars, jobs, results)
     end
 
+    #give workers a head start
     verbose && println_timestamp("Processing file...")
-    #start jobs
     buffer_n = 0
     for i in 1:buffer_s
         eof(f) && break
@@ -258,7 +260,7 @@ function aspu(
         buffer_n += 1
     end
 
-    #cycle through input file
+    #loop through the whole file
     outtest2 = outtest - length(buffer_s)
     for (n, line) in enumerate(eachline(f))
         n > outtest2 && break

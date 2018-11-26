@@ -7,3 +7,5 @@ test/data/tmptest
 test/runtests.jl
 test/data/aspu_results_1e6_smalldat
 test/data/aspu_z_covariance_smalldat
+test/aspu_z_covariance_smalldat
+test/aspu_results_1e6_smalldat
