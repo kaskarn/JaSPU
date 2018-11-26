@@ -195,7 +195,7 @@ function aspu(
     filename,
     outfile="make";
     covfile="", delim = '\t',
-    pows = collect(0:8), invcor=false, plim = 1e-5,
+    pows = collect(0:8), invcor = false, plim = 1e-5,
     maxiter = Int(1e7), ntest = Int(1e4),
     header = true, skip = 1,
     outtest = Inf, verbose = true,
@@ -203,8 +203,9 @@ function aspu(
     )
 
     Σ = cov_io(filename; delim = delim)
-    R = sqrt.(inv(Diagonal(Σ))) * Σ * sqrt.(inv(Diagonal(Σ)))
-
+    R0 = sqrt.(inv(Diagonal(Σ))) * Σ * sqrt.(inv(Diagonal(Σ)))
+    R = convert(Matrix, Hermitian(R0))
+    
     if verbose
         println("Covariance matrix computed")
         display(R)
@@ -213,6 +214,14 @@ function aspu(
 
     #default outfile value
     outfile == "make" && (outfile = string("aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
+
+    #Open input and output files
+    outdir = dirname(realpath(outfile))
+    outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
+    writedlm(outcov, R, '\t')
+
+    fout = outfile == "" ? stdout : open(outfile, "w")
+    f = open(filename, "r")
 
     # mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
     mvn = invcor ? MvNormal(inv(R)) : MvNormal(R)
@@ -223,14 +232,6 @@ function aspu(
     #Run simulations, and store forever
     allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest, maxiter; verbose=verbose)
     verbose && println_timestamp("Simulations initialized")
-
-    #Open input and output files
-    outdir = dirname(realpath(outfile))
-    outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
-    writedlm(outcov, R, '\t')
- 
-    fout = outfile == "" ? stdout : open(outfile, "w")
-    f = open(filename, "r")
 
     #write header
     line1 = header ? readline(f) : join(["snpid",[string("z",i) for i in 1:ntraits]...], delim)
