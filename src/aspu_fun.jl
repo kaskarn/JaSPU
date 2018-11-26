@@ -228,7 +228,7 @@ function aspu(
     outdir = dirname(realpath(outfile))
     outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
     writedlm(outcov, R, '\t')
-
+ 
     fout = outfile == "" ? stdout : open(outfile, "w")
     f = open(filename, "r")
 
