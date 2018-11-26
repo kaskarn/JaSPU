@@ -205,7 +205,7 @@ function aspu(
     Σ = cov_io(filename; delim = delim)
     R0 = sqrt.(inv(Diagonal(Σ))) * Σ * sqrt.(inv(Diagonal(Σ)))
     R = convert(Matrix, Hermitian(R0))
-    
+
     if verbose
         println("Covariance matrix computed")
         display(R)
@@ -216,7 +216,7 @@ function aspu(
     outfile == "make" && (outfile = string("aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filename)))
 
     #Open input and output files
-    outdir = dirname(realpath(outfile))
+    outdir = dirname(abspath(outfile))
     outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
     writedlm(outcov, R, '\t')
 
@@ -252,8 +252,8 @@ function aspu(
     #start jobs
     buffer_n = 0
     for i in 1:buffer_s
-        line = readline(f)
         eof(f) && break
+        line = readline(f)
         put!(jobs, line)
         buffer_n += 1
     end
