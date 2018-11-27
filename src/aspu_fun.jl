@@ -103,8 +103,8 @@ function do_initwork(jobs, results)
     end
 end
 
-function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,length(mvn),length(mvn)), verbose = true)
-
+#function simulating SPUs in parallel
+function init_aspu_par(pows, mvn, ntest, maxiter; verbose = true)
     maxchunks = Int(maxiter/ntest)
     ntraits = length(mvn)
     ranspu = zeros(length(pows), ntest)
@@ -154,10 +154,11 @@ function init_aspu_par(pows, mvn, ntest, maxiter; trans = Matrix{Float64}(I,leng
     [ rank_spus!(allranks[i], allvals[i], maxin[i]) for i in eachindex(allvals) ]
     allsorted = [ [ sort(allvals[i][g,:], rev=true)[1:maxin_arr[g,i]] for g in eachindex(pows) ] for i in eachindex(allvals) ]
 
+    verbose && println_timestamp("Simulations initialized")
     allsorted, allranks, maxin_arr, maxin
 end
 
-
+#function to process a single z-scores vector
 function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
     spu = getspu(pows, z, length(z))
     pval = zeros(Int, size(allsorted[1],1))
@@ -181,7 +182,8 @@ end
 
 #Arguments are passed once through the channel, then workers are started
 function do_aspuwork(vars, jobs, results)
-    allsorted, allranks, maxin_arr, maxin, pows, delim, trans = take!(vars)
+    aspu_obj, pows, delim, trans = take!(vars)
+    allsorted, allranks, maxin_arr, maxin = aspu_obj
     while true
         line = take!(jobs)
         ls = split(line, delim)
@@ -191,78 +193,83 @@ function do_aspuwork(vars, jobs, results)
     end
 end
 
+
+invsd(mat::Matrix) = sqrt(inv(Diagonal(mat)))
+cov2cor(mat::Matrix) = Matrix(Hermitian( invsd(mat) * mat * invsd(mat )))
 function aspu(
-    filename, outfile="make";
-    covfile="", delim = '\t',
-    pows = collect(0:8), invcor = false,
-    plim = 1e-4, maxiter = 1e7, ntest = 1e4,
-    header = true, skip = 1,
-    verbose = true, savecov = true,
-    outtest = Inf
+    filein::AbstractString, out::AbstractString = "";
+    covfile::AbstractString = "",
+    delim::Char = '\t',
+    pows::Vector{Int64} = collect(0:8), invR_trans::Bool = false,
+    plim::Float64 = 1e-4, maxiter::Int64 = 10^7, ntest::Int64 = 10^4,
+    header::Bool = true, skip::Int64 = 1,
+    verbose::Bool = true, savecov::Bool = true,
+    outtest::Real = Inf
     )
 
-    maxiter_int = floor(Int, maxiter)
-    ntest_int = floor(Int, ntest)
-    # pows = collect(eval(Meta.parse(string(pows)))) #pows::ints for now
+    #Create output file path
+    defdir = string("aspu_results_", dtnow())
+    outdir = out == "" ? defdir : (isdir(out) ? out : dirname(abspath(out)))
+    isdir(outdir) || mkdir(outdir)
+    defname = string("aspu_results_1e", Int(log10(maxiter)), "_", basename(filein))
+    outname = (out == "" || isdir(out)) ? defname : basename(out)
+    fileout = string(outdir, "/", outname)
 
-    Σ = cov_io(filename; delim = delim, covfile = covfile)
-    R0 = sqrt.(inv(Diagonal(Σ))) * Σ * sqrt.(inv(Diagonal(Σ)))
-    R = convert(Matrix, Hermitian(R0))
+    #Write header
+    line1 = header ? readline(fin) : join(["snpid",[string("z",i) for i in 1:ntraits]...], delim)
+    join(fout, vcat(line1, "aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma", '\n'), delim, "")
 
-    if verbose
-        println("Covariance matrix computed")
-        display(R0)
-        println("")
-    end
-
-    #default outfile value
-    outfile == "make" && (outfile = string("aspu_results_1e", ceil(Int, log10(maxiter_int)), "_", basename(filename)))
+    #Calculate R
+    Σ::Matrix{Float64} = covfile == "" ?
+        cov_io(filein; delim = delim, plim = plim, skip = skip, header = header) :
+        readdlm(covfile, ',')
+    R = cov2cor(Σ)
 
     #Open input and output files
-    outdir = dirname(abspath(outfile))
-    outcov = string(outdir, "/aspu_z_covariance_", basename(filename))
-    savecov && ( writedlm(outcov, R0, '\t') )
+    fout = fileout == "-" ? stdout : open(fileout, "w")
+    fin = filein == "-" ? stdin : open(filein, "r")
 
-    fout = outfile == "" ? stdout : open(outfile, "w")
-    f = open(filename, "r")
+    #Show and save R
+    if verbose
+        println("Covariance matrix computed")
+        display(R); println("")
+    end
+    outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
+    savecov && ( writedlm(outcov, R, '\t') )
 
-    # mvn = invcor ? MvNormal(inv(Σ)) : MvNormal(Σ)
-    mvn = invcor ? MvNormal(inv(R)) : MvNormal(R)
-    trans = invcor ? inv(R) : one(R)
+    #Create MVM distribution from R
+    mvn = invR_trans ? MvNormal(inv(R)) : MvNormal(R)
+    trans = invR_trans ? inv(R) : one(R)
     ntraits = length(mvn)
 
     #Run simulations, and store forever
-    allsorted, allranks, maxin_arr, maxin = init_aspu_par(pows, mvn, ntest_int, maxiter_int; verbose=verbose)
-    verbose && println_timestamp("Simulations initialized")
+    aspu_obj = init_aspu_par(pows, mvn, ntest, maxiter; verbose=verbose)
 
-    #write header
-    line1 = header ? readline(f) : join(["snpid",[string("z",i) for i in 1:ntraits]...], delim)
-    join(fout, vcat(line1, "aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma", '\n'), delim, "")
-
-    #for parallel
+    #Setup parallel channels
     buffer_s = min(10*nworkers(), outtest)
     jobs = RemoteChannel(()->Channel{String}(buffer_s))
     results = RemoteChannel(()->Channel{Any}(buffer_s))
     vars = RemoteChannel(()->Channel{Any}(length(workers())))
 
+    #Start workers
     for p in workers()
-        put!(vars, (allsorted, allranks, maxin_arr, maxin, pows, delim, trans))
+        put!(vars, (aspu_obj, pows, delim, trans))
         remote_do(do_aspuwork, p, vars, jobs, results)
     end
 
-    #give workers a head start
+    #Give workers a head start
     verbose && println_timestamp("Processing file...")
     buffer_n = 0
     for i in 1:buffer_s
-        eof(f) && break
-        line = readline(f)
+        eof(fin) && break
+        line = readline(fin)
         put!(jobs, line)
         buffer_n += 1
     end
 
     #loop through the whole file
     outtest2 = outtest - length(buffer_s)
-    for (n, line) in enumerate(eachline(f))
+    for (n, line) in enumerate(eachline(fin))
         n > outtest2 && break
         put!(jobs, line)
         out = take!(results)
@@ -278,5 +285,5 @@ function aspu(
     #close files
     verbose && println_timestamp("All done.\n")
     close(fout)
-    close(f)
+    close(fin)
 end
