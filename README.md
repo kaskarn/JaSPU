@@ -22,16 +22,14 @@ multiple sums of powered scores:
 
 <a href="https://www.codecogs.com/eqnedit.php?latex=SPU(\gamma)=\sum_k&space;|S_k^\gamma&space;|" target="_blank"><img src="https://latex.codecogs.com/gif.latex?SPU(\gamma)=\sum_k&space;|S_k^\gamma&space;|" title="SPU(\gamma)=\sum_k |S_k^\gamma |" /></a>
 
-Where gamma takes on integer values, by default:
+Where S may either be untransformed z-scores (the default), or z-scores transformed with the inverse of R:
+<a href="https://www.codecogs.com/eqnedit.php?latex=S=R^{-1}Z" target="_blank"><img src="https://latex.codecogs.com/gif.latex?S=R^{-1}Z" title="S=R^{-1}Z" /></a>, and gamma takes on integer values, by default:
 <a href="https://www.codecogs.com/eqnedit.php?latex=\gamma&space;=&space;1,2,\ldots,\infty" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\gamma&space;=&space;1,2,\ldots,\infty" title="\gamma = 1,2,\ldots,\infty" /></a>
 with <a href="https://www.codecogs.com/eqnedit.php?latex=SPU(\infty)" target="_blank"><img src="https://latex.codecogs.com/gif.latex?SPU(\infty)" title="SPU(\infty)" /></a>
 equivalently computed as <a href="https://www.codecogs.com/eqnedit.php?latex=SPU(\infty)=\max_k&space;|S_k|" target="_blank"><img src="https://latex.codecogs.com/gif.latex?SPU(\infty)=\max_k&space;|S_k|" title="SPU(\infty)=\max_k |S_k|" /></a>
 
 aSPU adaptively selects the SPU with the greatest power, and performs Monte-Carlo simulations to produce p-values,
 using the empirical multivariate-normal distribution of null z-scores, R.
-
-S may either be untransformed z-scores (the default), or z-scores transformed with the inverse of R:
-<a href="https://www.codecogs.com/eqnedit.php?latex=S=R^{-1}Z" target="_blank"><img src="https://latex.codecogs.com/gif.latex?S=R^{-1}Z" title="S=R^{-1}Z" /></a>
 
 ## Package description
 
@@ -60,6 +58,8 @@ a file name.
 The `aspu` function has two required arguments: a path to the input file, and the number of iterations used to calculate p-values.
 Since Monte-Carlo simulations are used to compute p-values, the minimum achievable aSPU p-value using N iterations will be <a href="https://www.codecogs.com/eqnedit.php?latex=p_{min}=(N&plus;1)^{-1}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?p_{min}=(N&plus;1)^{-1}" title="p_{min}=(N+1)^{-1}" /></a>
 
+*The number of iterations should be provided as a power of 10, any other number will be rounded up to the next power of
+10 (e.g. 200,000 -> 1,000,000)*
 
 ```julia
    aspu(
@@ -68,6 +68,35 @@ Since Monte-Carlo simulations are used to compute p-values, the minimum achievab
     covfile::AbstractString = "", plim::Float64 = 1e-4,                       #R estimation options
     delim::Char = '\t', noheader::Bool = false, skip::Int64 = 1,              #input file options
     out::AbstractString = "", verbose::Bool = true, nosavecov::Bool = false,  #output options
-    outtest::Real = Inf, nchunk::Int64 = 10^4                                 #testing/development
+    outtest::Real = Inf                                                       #testing/development
     )
 ```
+
+A simple, common example would be to compute aSPU with default gammas, allowing p-values to well exceed the genome-wide significance threshold of 5e-8:
+
+```julia
+   aspu(myzscores.txt, 10^9) #use default output
+   aspu(myzscores.txt, 10^9, out = "aspu_results/myresults.txt") #save output to specific destination
+   aspu(myzscores.txt, 10^9, )
+```
+
+Users may choose a more succinct set of gamma values, since added gains from large gammas are uncertain. A reasonable alternative set may
+be 1, 2, 3, and infinity. We use 0 to represent infinity, and the `aspu` call can be made as:
+
+```julia
+   aspu(myzscores.txt, 10^9, pows = [0, 1, 2, 3])
+```
+
+## Performance
+Below are rough estimates for the CPU-hours spent on Monte-Carlo simulations, estimated on the UNC-Chapel hill high-performance computing cluster (longleaf):
+
+| Iterations | minimum p-value | CPU-hours |
+| ---------- | --------------- | --------- |
+| 10^9       | 1E-9            | 2.8       |
+| 10^10      | 1E-10           | 24        |
+| 10^11      | 1E-11           | 264       |
+
+These do not count the time taken to read and process SNPs, which depends on the number of SNPs. In our case, it took 5.5 hours to run `aspu` on 18M SNPs, using 10^11 iterations, and 60 CPUs.
+
+### Memory usage
+The `aspu` function does not create particularly large objects

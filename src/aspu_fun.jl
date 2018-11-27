@@ -1,3 +1,6 @@
+#defines the size of each simulation chunk
+const ASPU_NCHUNK = 10^4
+
 #returns SPU(gamma) for all gammas. fast
 function getspu!(spu, pows, z, n)
   @inbounds for i in eachindex(pows)
@@ -14,29 +17,6 @@ function getspu!(spu, pows, z, n)
     spu[i] = abs(spu[i])
   end
 end
-
-
-# function getspu2!(spu, pows, z, n)
-#     notinf = eachindex(pows)[[x!=0 for x in pows]]
-#     inf_a = view(spu, eachindex(pows)[[x==0 for x in pows]])
-#     inf_n = length(inf_a)
-#
-#     copyto!(inf_a, 1, z, 1, inf_n)
-#
-#     for i in notinf
-#         @inbounds spu[i] = z[1]^(pows[i])
-#     end
-#     for j in 2:n
-#         for i in notinf
-#             @inbounds spu[i] += z[j]^(pows[i])
-#         end
-#         (-inf_a[1] < z[j] < inf_a[1]) || (copyto!(inf_a, 1, z, j, inf_n))
-#     end
-#     for i in eachindex(spu)
-#         @inbounds spu[i] = abs(spu[i])
-#     end
-# end
-
 
 function getspu(pows::Array{Int64, 1}, z::Vector{T}, n::Int64) where {T<:Real}
   tmpspu = Array{T}(undef, length(pows))
@@ -71,7 +51,9 @@ end
 
 
 #add values exceeding threshold to array
-function create_arref(nchunk, mvn, thresh, pows)
+function create_arref(mvn, thresh, pows)
+    nchunk = ASPU_NCHUNK
+
     tmp = zeros(Float64, length(pows))
     np = length(pows)
     ntraits = length(mvn)
@@ -90,21 +72,23 @@ function create_arref(nchunk, mvn, thresh, pows)
             out[:, n] = tmp
         end
     end
-    n, narr, out
+    n, narr, out[:, 1:n]
 end
 
-#parallel functions
-function do_initwork(jobs, results)
-    nchunk = 1
-    while nchunk > 0
-        pows, mvn, nchunk, thresh = take!(jobs)
-        out = create_arref(nchunk, mvn, thresh, pows)
+#Start workers for initialization
+function do_initwork(vars, jobs, results)
+    pows, mvn = take!(vars)
+    while true
+        thresh = take!(jobs)
+        out = create_arref(mvn, thresh, pows)
         put!(results, out)
     end
 end
 
 #function simulating SPUs in parallel
-function init_aspu_par(pows, mvn, nchunk, maxiter; verbose = true)
+function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
+    nchunk = ASPU_NCHUNK
+
     maxchunks = Int(maxiter/nchunk)
     ntraits = length(mvn)
     ranspu = zeros(length(pows), nchunk)
@@ -113,10 +97,14 @@ function init_aspu_par(pows, mvn, nchunk, maxiter; verbose = true)
     maxin_arr = zeros(Int, length(pows), ceil(Int, 1+log10(maxiter/nchunk)))
 
     #for parallel; define channels and start workers
-    jobs = RemoteChannel(()->Channel{Any}(maxchunks))
+    thresh::Vector{Float64} = fill(0.0, length(pows))
+    jobs = RemoteChannel(()->Channel{typeof(thresh)}(maxchunks))
     results = RemoteChannel(()->Channel{Any}(maxchunks))
+    init_vars = RemoteChannel(()->Channel{Any}(length(workers())))
+
     for p in workers()
-      remote_do(do_initwork, p, jobs, results)
+        put!(init_vars, (pows, mvn))
+        remote_do(do_initwork, p, init_vars, jobs, results)
     end
 
     #big data structure to hold simulations
@@ -139,12 +127,12 @@ function init_aspu_par(pows, mvn, nchunk, maxiter; verbose = true)
         fullchunks = floor(Int, iternow/nchunk)
 
         for chunk in 1:fullchunks
-            put!(jobs, (pows, mvn, nchunk, thresh))
+            put!(jobs, thresh)
         end
         for chunk in 1:fullchunks
             tn, tnarr, tout = take!(results)
             maxin_arr[:,i] = maxin_arr[:,i] .+ tnarr
-            allvals[i][:, (maxin[i]+1) : (maxin[i]+tn)] = tout[:, 1:tn]
+            allvals[i][:, (maxin[i]+1) : (maxin[i]+tn)] = tout
             maxin[i] += tn
         end
     end
@@ -200,21 +188,26 @@ end
 
 invsd(mat::Matrix) = sqrt(inv(Diagonal(mat)))
 cov2cor(mat::Matrix) = Matrix(Hermitian( invsd(mat) * mat * invsd(mat )))
+
 function aspu(
-    filein::AbstractString, maxiter::Int64;
+    filein::AbstractString, niter::Int64;
     pows::Vector{Int64} = collect(0:8), invR_trans::Bool = false,
     covfile::AbstractString = "", plim::Float64 = 1e-4,
     delim::Char = '\t', noheader::Bool = false, skip::Int64 = 1, na::String = "NA",
     out::AbstractString = "", verbose::Bool = true, nosavecov::Bool = false,
-    outtest::Real = Inf,
-    nchunk::Int64 = 10^4
+    outtest::Real = Inf
     )
+
+    nchunk = ASPU_NCHUNK
+
+    maxiter = Int(10^(ceil(Int, log10(niter))))
+    maxiter > niter && println("\nIterations were rounded up to the next power of 10: $maxiter \n")
 
     #Create output file path
     defdir = string("aspu_results_", dtnow())
     outdir = out == "" ? defdir : (isdir(out) ? out : dirname(abspath(out)))
     isdir(outdir) || mkdir(outdir)
-    defname = string("aspu_results_1e", Int(log10(maxiter)), "_", basename(filein))
+    defname = string("aspu_results_1e", ceil(Int, log10(maxiter)), "_", basename(filein))
     outname = (out == "" || isdir(out)) ? defname : basename(out)
     fileout = string(outdir, "/", outname)
 
@@ -246,7 +239,7 @@ function aspu(
     ntraits = length(mvn)
 
     #Run simulations, and store forever
-    aspu_obj = init_aspu_par(pows, mvn, nchunk, maxiter; verbose=verbose)
+    aspu_obj = init_aspu_par(pows, mvn, maxiter; verbose=verbose)
 
     #Setup parallel channels
     buffer_s = min(10*nworkers(), outtest)
