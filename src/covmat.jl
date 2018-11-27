@@ -1,5 +1,5 @@
 #computes X Xt without loading file in memory
-function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip = 1, header = true)
+function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip = 1, header = true, na = "NA")
     f = open(filename, "r")
     xlen = length(split(readline(f), delim)) - skip
     header || seek(f, 0)
@@ -8,7 +8,9 @@ function xxt_io(filename::AbstractString; plim = 1e-5, delim::Char = '\t', skip 
     n, s = 0, 0, 0
     ztresh = abs(quantile(Normal(0,1), plim/2))
     for line in eachline(f)
-        lp = parse.(Float64, split(line, delim)[(1+skip):end])
+        ls = split(line, delim)[(1+skip):end]
+        in(na, ls) && continue
+        lp = parse.(Float64, ls)
         if maximum(abs.(lp)) > ztresh
             s += 1
             continue

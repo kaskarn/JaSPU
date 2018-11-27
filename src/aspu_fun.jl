@@ -71,15 +71,15 @@ end
 
 
 #add values exceeding threshold to array
-function create_arref(ntest, mvn, thresh, pows)
+function create_arref(nchunk, mvn, thresh, pows)
     tmp = zeros(Float64, length(pows))
     np = length(pows)
     ntraits = length(mvn)
-    out = zeros(Float64, length(pows), ntest)
+    out = zeros(Float64, length(pows), nchunk)
     n = 0
     narr = zeros(Int, length(pows))
-    ran = rand(mvn, ntest)
-    for i in 1:ntest
+    ran = rand(mvn, nchunk)
+    for i in 1:nchunk
         getspu!(tmp, pows, ran[:,i], ntraits)
         topind = tmp .> thresh
         for p in eachindex(pows)[topind]
@@ -95,22 +95,22 @@ end
 
 #parallel functions
 function do_initwork(jobs, results)
-    ntest = 1
-    while ntest > 0
-        pows, mvn, ntest, thresh = take!(jobs)
-        out = create_arref(ntest, mvn, thresh, pows)
+    nchunk = 1
+    while nchunk > 0
+        pows, mvn, nchunk, thresh = take!(jobs)
+        out = create_arref(nchunk, mvn, thresh, pows)
         put!(results, out)
     end
 end
 
 #function simulating SPUs in parallel
-function init_aspu_par(pows, mvn, ntest, maxiter; verbose = true)
-    maxchunks = Int(maxiter/ntest)
+function init_aspu_par(pows, mvn, nchunk, maxiter; verbose = true)
+    maxchunks = Int(maxiter/nchunk)
     ntraits = length(mvn)
-    ranspu = zeros(length(pows), ntest)
+    ranspu = zeros(length(pows), nchunk)
     tmp = zeros(length(pows))
-    maxin = zeros(Int, ceil(Int, 1+log10(maxiter/ntest)))
-    maxin_arr = zeros(Int, length(pows), ceil(Int, 1+log10(maxiter/ntest)))
+    maxin = zeros(Int, ceil(Int, 1+log10(maxiter/nchunk)))
+    maxin_arr = zeros(Int, length(pows), ceil(Int, 1+log10(maxiter/nchunk)))
 
     #for parallel; define channels and start workers
     jobs = RemoteChannel(()->Channel{Any}(maxchunks))
@@ -120,26 +120,26 @@ function init_aspu_par(pows, mvn, ntest, maxiter; verbose = true)
     end
 
     #big data structure to hold simulations
-    allvals = [zeros(length(pows), ntest*10) for i in 1:ceil(Int, 1+log10(maxiter/ntest))]
+    allvals = [zeros(length(pows), nchunk*10) for i in 1:ceil(Int, 1+log10(maxiter/nchunk))]
 
     #fill first bucket to the brim
-    verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(ntest)))")
-    ran = rand(mvn, ntest)
-    for i in 1:ntest
+    verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(nchunk)))")
+    ran = rand(mvn, nchunk)
+    for i in 1:nchunk
         getspu!(view(allvals[1],:,i), pows, ran[:,i], ntraits)
     end
-    maxin[1] = ntest
-    fill!(view(maxin_arr,:,1), ntest)
+    maxin[1] = nchunk
+    fill!(view(maxin_arr,:,1), nchunk)
 
     #pass each bucket of values to workers
     for i in eachindex(allvals)[2:end]
-        verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(ntest))+i-1)")
-        iternow = ntest*10^(i-1)
-        thresh = [partialsort(view(allvals[i-1],j,:), Int(ntest*0.10); rev = true) for j in eachindex(pows)]
-        fullchunks = floor(Int, iternow/ntest)
+        verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(nchunk))+i-1)")
+        iternow = nchunk*10^(i-1)
+        thresh = [partialsort(view(allvals[i-1],j,:), Int(nchunk*0.10); rev = true) for j in eachindex(pows)]
+        fullchunks = floor(Int, iternow/nchunk)
 
         for chunk in 1:fullchunks
-            put!(jobs, (pows, mvn, ntest, thresh))
+            put!(jobs, (pows, mvn, nchunk, thresh))
         end
         for chunk in 1:fullchunks
             tn, tnarr, tout = take!(results)
@@ -182,14 +182,18 @@ end
 
 #Arguments are passed once through the channel, then workers are started
 function do_aspuwork(vars, jobs, results)
-    aspu_obj, pows, delim, trans = take!(vars)
+    aspu_obj, pows, delim, trans, na = take!(vars)
     allsorted, allranks, maxin_arr, maxin = aspu_obj
     while true
         line = take!(jobs)
         ls = split(line, delim)
-        z = trans*parse.(Float64, ls[2:end])
-        out = getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
-        put!(results, (ls, out))
+        if in(na, ls)
+            put!(results, (ls, fill(na, length(pows)+2)))
+        else
+            z = trans*parse.(Float64, ls[2:end])
+            out = getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
+            put!(results, (ls, out))
+        end
     end
 end
 
@@ -197,14 +201,13 @@ end
 invsd(mat::Matrix) = sqrt(inv(Diagonal(mat)))
 cov2cor(mat::Matrix) = Matrix(Hermitian( invsd(mat) * mat * invsd(mat )))
 function aspu(
-    filein::AbstractString, out::AbstractString = "";
-    covfile::AbstractString = "",
-    delim::Char = '\t',
+    filein::AbstractString, maxiter::Int64;
     pows::Vector{Int64} = collect(0:8), invR_trans::Bool = false,
-    plim::Float64 = 1e-4, maxiter::Int64 = 10^7, ntest::Int64 = 10^4,
-    header::Bool = true, skip::Int64 = 1,
-    verbose::Bool = true, savecov::Bool = true,
-    outtest::Real = Inf
+    covfile::AbstractString = "", plim::Float64 = 1e-4,
+    delim::Char = '\t', noheader::Bool = false, skip::Int64 = 1, na::String = "NA",
+    out::AbstractString = "", verbose::Bool = true, nosavecov::Bool = false,
+    outtest::Real = Inf,
+    nchunk::Int64 = 10^4
     )
 
     #Create output file path
@@ -215,13 +218,9 @@ function aspu(
     outname = (out == "" || isdir(out)) ? defname : basename(out)
     fileout = string(outdir, "/", outname)
 
-    #Write header
-    line1 = header ? readline(fin) : join(["snpid",[string("z",i) for i in 1:ntraits]...], delim)
-    join(fout, vcat(line1, "aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma", '\n'), delim, "")
-
     #Calculate R
     Σ::Matrix{Float64} = covfile == "" ?
-        cov_io(filein; delim = delim, plim = plim, skip = skip, header = header) :
+        cov_io(filein; delim = delim, plim = plim, skip = skip, header = !noheader) :
         readdlm(covfile, ',')
     R = cov2cor(Σ)
 
@@ -229,13 +228,17 @@ function aspu(
     fout = fileout == "-" ? stdout : open(fileout, "w")
     fin = filein == "-" ? stdin : open(filein, "r")
 
+    #Write header
+    line1 = noheader ? join(["snpid",[string("z",i) for i in 1:ntraits]...], delim) : readline(fin)
+    join(fout, vcat(line1, "aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma", '\n'), delim, "")
+
     #Show and save R
     if verbose
         println("Covariance matrix computed")
         display(R); println("")
     end
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
-    savecov && ( writedlm(outcov, R, '\t') )
+    nosavecov || ( writedlm(outcov, R, '\t') )
 
     #Create MVM distribution from R
     mvn = invR_trans ? MvNormal(inv(R)) : MvNormal(R)
@@ -243,7 +246,7 @@ function aspu(
     ntraits = length(mvn)
 
     #Run simulations, and store forever
-    aspu_obj = init_aspu_par(pows, mvn, ntest, maxiter; verbose=verbose)
+    aspu_obj = init_aspu_par(pows, mvn, nchunk, maxiter; verbose=verbose)
 
     #Setup parallel channels
     buffer_s = min(10*nworkers(), outtest)
@@ -253,7 +256,7 @@ function aspu(
 
     #Start workers
     for p in workers()
-        put!(vars, (aspu_obj, pows, delim, trans))
+        put!(vars, (aspu_obj, pows, delim, trans, na))
         remote_do(do_aspuwork, p, vars, jobs, results)
     end
 

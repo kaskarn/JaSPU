@@ -7,11 +7,11 @@ using Random
 @everywhere using JaSPU
 
 #generic tests and benchmarks
-aspu("data/smalldat", "results/tmptest"; maxiter=10^5)
-aspu("data/smalldat", "results", maxiter=10^6, plim = 10^-4)
+aspu("data/smalldat", 10^5; out = "results/tmptest")
+aspu("data/smalldat", 10^6; out = "results", plim = 10^-4)
 
-@time aspu("data/smalldat", "results"; maxiter=10^5, verbose = false)
-@time aspu("data/smalldat", "results"; maxiter=10^6, verbose = false)
+@time aspu("data/smalldat", 10^5; out = "results")
+@time aspu("data/smalldat", 10^6; out = "results", verbose = false)
 
 
 #test values
