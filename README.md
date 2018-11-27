@@ -77,7 +77,7 @@ A simple, common example would be to compute aSPU with default gammas, allowing 
 ```julia
    aspu(myzscores.txt, 10^9) #use default output
    aspu(myzscores.txt, 10^9, out = "aspu_results/myresults.txt") #save output to specific destination
-   aspu(myzscores.txt, 10^9, )
+   aspu(myzscores.txt, 10^9, plim = 1e-5) #use a lower threshold for null SNPs in computation of empirical correlation
 ```
 
 Users may choose a more succinct set of gamma values, since added gains from large gammas are uncertain. A reasonable alternative set may
