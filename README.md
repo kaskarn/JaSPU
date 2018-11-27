@@ -29,13 +29,13 @@ with <a href="https://www.codecogs.com/eqnedit.php?latex=SPU(\infty)" target="_b
 equivalently computed as <a href="https://www.codecogs.com/eqnedit.php?latex=SPU(\infty)=\max_k&space;|S_k|" target="_blank"><img src="https://latex.codecogs.com/gif.latex?SPU(\infty)=\max_k&space;|S_k|" title="SPU(\infty)=\max_k |S_k|" /></a>
 
 aSPU adaptively selects the SPU with the greatest power, and performs Monte-Carlo simulations to produce p-values,
-using the empirical multivariate-normal distribution of null z-scores, R.
+using the empirical multivariate-normal distribution of null z-scores.
 
 ## Package description
 
 The package provides the function `aspu` to compute SPU and aSPU p-values for each SNP contained in an input file. This implementation
-fully uses available processors (which must be previously added with `addprocs()`, or `ClusterManagers` functions), has a small
-memory footprint (<1G per CPU), and is very fast.
+fully uses available processors (which must be previously added with `addprocs()`, or `ClusterManagers` functions), has a minimal
+memory footprint, and is orders of magnitude faster than R implementations.
 
 ### Input file
 The input file must include one SNP per line, with the first column containing SNP names, and, by default, each subsequent column
