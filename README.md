@@ -75,16 +75,15 @@ Since Monte-Carlo simulations are used to compute p-values, the minimum achievab
 A simple, common example would be to compute aSPU with default gammas, allowing p-values to well exceed the genome-wide significance threshold of 5e-8:
 
 ```julia
-   aspu(myzscores.txt, 10^9) #use default output
-   aspu(myzscores.txt, 10^9, out = "aspu_results/myresults.txt") #save output to specific destination
-   aspu(myzscores.txt, 10^9, plim = 1e-5) #use a lower threshold for null SNPs in computation of empirical correlation
+   aspu("myzscores.txt", 10^9) #use default output
+   aspu("myzscores.txt", 10^9, out = "aspu_results/myresults.txt") #save output to specific destination
+   aspu("myzscores.txt", 10^9, plim = 1e-5) #use a lower threshold for null SNPs when computing Z correlation
 ```
 
-Users may choose a more succinct set of gamma values, since added gains from large gammas are uncertain. A reasonable alternative set may
-be 1, 2, 3, and infinity. We use 0 to represent infinity, and the `aspu` call can be made as:
+Users may choose a more succinct set of gamma values, since added gains from large gammas are uncertain. A reasonable alternative set may be 1, 2, 3, and infinity. We use 0 to represent infinity, and the `aspu` call can be made as:
 
 ```julia
-   aspu(myzscores.txt, 10^9, pows = [0, 1, 2, 3])
+   aspu("myzscores.txt", 10^9, pows = [0, 1, 2, 3])
 ```
 
 ## Performance

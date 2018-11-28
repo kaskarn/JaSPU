@@ -231,7 +231,7 @@ function aspu(
         display(R); println("")
     end
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
-    nosavecov || ( writedlm(outcov, R, '\t') )
+    nosavecov || ( writedlm(outcov, R) )
 
     #Create MVM distribution from R
     mvn = invR_trans ? MvNormal(inv(R)) : MvNormal(R)
