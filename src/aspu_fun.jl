@@ -1,26 +1,22 @@
 #defines the size of each simulation chunk
 const ASPU_NCHUNK = 10^4
 
-#returns SPU(gamma) for all gammas. fast
-function getspu!(spu, pows, z, n)
-  @inbounds for i in eachindex(pows)
-    @fastmath pows[i] != 0 && (spu[i] = z[1]^(pows[i]))
-    pows[i] == 0 && (spu[i] = abs(z[1]))
-  end
-  @inbounds for j = 2:n
-    for i in eachindex(pows)
-      @fastmath (pows[i] != 0) && (spu[i] += z[j]^(pows[i]))
-      (pows[i] == 0) && (abs(z[j]) > spu[i]) && (spu[i] = abs(z[j]))
+function spu(z, g::Integer)
+    out = 0.0
+    g == 0 && return(maximum(abs.(z)))
+    for i in z
+        @fastmath @inbounds out += i^g
     end
-  end
-  @inbounds for i = eachindex(pows)
-    spu[i] = abs(spu[i])
-  end
+    abs(out)
 end
-
-function getspu(pows::Array{Int64, 1}, z::Vector{T}, n::Int64) where {T<:Real}
+function getspu!(out, pows, z)
+    for (i, g) in enumerate(pows)
+        @inbounds out[i] = spu(z, g)
+    end
+end
+function getspu(pows::Vector{Int64}, z::Vector{T}) where {T<:Real}
   tmpspu = Array{T}(undef, length(pows))
-  getspu!(tmpspu,pows,z,n)
+  getspu!(tmpspu,pows,z)
   tmpspu
 end
 
@@ -49,20 +45,17 @@ function rank_spus!(rnk::AbstractArray{Int64, 2}, zb::Array{T,2}, B = size(zb, 2
   0
 end
 
-
 #add values exceeding threshold to array
 function create_arref(mvn, thresh, pows)
     nchunk = ASPU_NCHUNK
 
     tmp = zeros(Float64, length(pows))
-    np = length(pows)
-    ntraits = length(mvn)
     out = zeros(Float64, length(pows), nchunk)
     n = 0
     narr = zeros(Int, length(pows))
     ran = rand(mvn, nchunk)
     for i in 1:nchunk
-        getspu!(tmp, pows, ran[:,i], ntraits)
+        getspu!(tmp, pows, ran[:,i])
         topind = tmp .> thresh
         for p in eachindex(pows)[topind]
             narr[p] += 1
@@ -90,9 +83,6 @@ function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
     nchunk = ASPU_NCHUNK
 
     maxchunks = Int(maxiter/nchunk)
-    ntraits = length(mvn)
-    ranspu = zeros(length(pows), nchunk)
-    tmp = zeros(length(pows))
     maxin = zeros(Int, ceil(Int, 1+log10(maxiter/nchunk)))
     maxin_arr = zeros(Int, length(pows), ceil(Int, 1+log10(maxiter/nchunk)))
 
@@ -114,7 +104,7 @@ function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
     verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(nchunk)))")
     ran = rand(mvn, nchunk)
     for i in 1:nchunk
-        getspu!(view(allvals[1],:,i), pows, ran[:,i], ntraits)
+        getspu!(view(allvals[1],:,i), pows, ran[:,i])
     end
     maxin[1] = nchunk
     fill!(view(maxin_arr,:,1), nchunk)
@@ -125,7 +115,6 @@ function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
         iternow = nchunk*10^(i-1)
         thresh = [partialsort(view(allvals[i-1],j,:), Int(nchunk*0.10); rev = true) for j in eachindex(pows)]
         fullchunks = floor(Int, iternow/nchunk)
-
         for chunk in 1:fullchunks
             put!(jobs, thresh)
         end
@@ -148,8 +137,8 @@ end
 
 #function to process a single z-scores vector
 function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
-    spu = getspu(pows, z, length(z))
-    pval = zeros(Int, size(allsorted[1],1))
+    spu = getspu(pows, z)
+    pval = zeros(Int, length(pows))
     ind_p = fill(length(allsorted), length(pows))
     i = 0
     B = maxin[1]
@@ -168,13 +157,13 @@ function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
     aspu_p, p_out, gamma
 end
 
-#Arguments are passed once through the channel, then workers are started
+# Arguments are passed once through the channel, then workers are started
 function do_aspuwork(vars, jobs, results)
     aspu_obj, pows, delim, trans, na = take!(vars)
     allsorted, allranks, maxin_arr, maxin = aspu_obj
     while true
-        line = take!(jobs)
-        ls = split(line, delim)
+        line::String = take!(jobs)
+        ls::Vector{String} = split(line, delim)
         if in(na, ls)
             put!(results, (ls, fill(na, length(pows)+2)))
         else
@@ -185,9 +174,8 @@ function do_aspuwork(vars, jobs, results)
     end
 end
 
-
 invsd(mat::Matrix) = sqrt(inv(Diagonal(mat)))
-cov2cor(mat::Matrix) = Matrix(Hermitian( invsd(mat) * mat * invsd(mat )))
+cov2cor(mat::Matrix) = Matrix(Hermitian( invsd(mat) * mat * invsd(mat) ))
 
 function aspu(
     filein::AbstractString, niter::Int64;
@@ -221,22 +209,21 @@ function aspu(
     fout = fileout == "-" ? stdout : open(fileout, "w")
     fin = filein == "-" ? stdin : open(filein, "r")
 
-    #Write header
-    line1 = noheader ? join(["snpid",[string("z",i) for i in 1:ntraits]...], delim) : readline(fin)
-    join(fout, vcat(line1, "aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma", '\n'), delim, "")
-
     #Show and save R
     if verbose
         println("Covariance matrix computed")
         display(R); println("")
     end
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
-    nosavecov || ( writedlm(outcov, R) )
+    nosavecov || (writedlm(outcov, R))
 
     #Create MVM distribution from R
     mvn = invR_trans ? MvNormal(inv(R)) : MvNormal(R)
     trans = invR_trans ? inv(R) : one(R)
-    ntraits = length(mvn)
+
+    #Write header
+    line1 = noheader ? join(["snpid",[string("z",i) for i in 1:length(mvn)]...], delim) : readline(fin)
+    join(fout, vcat(line1, "aspu_p", map(*, fill("p_spu_",length(pows)), string.(pows)), "gamma", '\n'), delim, "")
 
     #Run simulations, and store forever
     aspu_obj = init_aspu_par(pows, mvn, maxiter; verbose=verbose)
@@ -264,7 +251,7 @@ function aspu(
     end
 
     #loop through the whole file
-    outtest2 = outtest - length(buffer_s)
+    outtest2 = outtest - buffer_n
     for (n, line) in enumerate(eachline(fin))
         n > outtest2 && break
         put!(jobs, line)
