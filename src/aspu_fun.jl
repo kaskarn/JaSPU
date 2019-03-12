@@ -218,7 +218,8 @@ function aspu(
     nosavecov || (writedlm(outcov, R))
 
     #Create MVM distribution from R
-    mvn = invR_trans ? MvNormal(inv(R)) : MvNormal(R)
+
+    mvn = invR_trans ? MvNormal(Matrix(Hermitian(inv(R)))) : MvNormal(R)
     trans = invR_trans ? inv(R) : one(R)
 
     #Write header

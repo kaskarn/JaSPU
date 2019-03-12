@@ -8,6 +8,7 @@ using Random
 
 #generic tests and benchmarks
 aspu("data/smalldat", 10^5; out = "results/tmptest")
+aspu("data/smalldat", 10^5; out = "results/tmptest", invR_trans = true)
 aspu("data/smalldat", 10^6; out = "results", plim = 10^-4)
 
 @time aspu("data/smalldat", 10^5; out = "results")
