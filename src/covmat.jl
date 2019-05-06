@@ -37,5 +37,5 @@ end
 function cov_io(fin; plim = 1e-5, delim::Char = '\t', skip = 1, header = true)
     xxt, tot, n, s = xxt_io(fin; plim = plim, delim=delim, header = header, skip = skip)
     μ = tot./n
-    Σ = (xxt .- μ*tot' .- tot*μ' .+  n*μ*μ')/(n-1)
+    Σ = (xxt .- μ*tot')/(n-1)
 end

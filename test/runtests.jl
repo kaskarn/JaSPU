@@ -3,6 +3,7 @@ using Test
 using Distributed
 using Distributions
 using Random
+using CSV
 
 @everywhere using JaSPU
 
@@ -28,3 +29,13 @@ out = JaSPU.getaspu(z, aspuobj..., pows)
 # getspu(pows, z, 4)
 
 @test out[1] == 0.12266877331226687
+
+
+#test correlation
+df = CSV.read("test/data/smalldat", delim = '\t', header = true, missingstring = "NA")
+
+keepval = .! (ismissing.(df[2]) .| ismissing.(df[3]))
+basecov = cov(df.z1[keepval], df.z2[keepval])
+mycov = cov_io("test/data/smalldat")
+
+@test isapprox(basecov, mycov[1,2])
