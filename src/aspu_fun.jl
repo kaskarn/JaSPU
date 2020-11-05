@@ -217,8 +217,8 @@ function aspu(
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
     nosavecov || (writedlm(outcov, R))
     
-    writedlm("cov_$outcov", Σ)
-    writedlm("invcor_$outcov", inv(R))
+    writedlm("$(outcov)_cov", Σ)
+    writedlm("$(outcov)_invcor", inv(R))
     
     #Create MVM distribution from R
 
