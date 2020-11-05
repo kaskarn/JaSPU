@@ -217,6 +217,7 @@ function aspu(
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
     nosavecov || (writedlm(outcov, R))
     
+    println("$outcov")
     writedlm("$(outcov)_cov", Σ)
     writedlm("$(outcov)_invcor", inv(R))
     
