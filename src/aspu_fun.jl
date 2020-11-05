@@ -218,9 +218,6 @@ function aspu(
     nosavecov || (writedlm(outcov, R))
     
     
-    writedlm("test_cov", Σ)
-    writedlm("test_invcor", inv(R))
-    
     #Create MVM distribution from R
 
     
