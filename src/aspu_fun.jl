@@ -216,9 +216,13 @@ function aspu(
     end
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
     nosavecov || (writedlm(outcov, R))
-
+    
+    nosavecov || (writedlm("cov_$outcov", Σ))
+    mvn = invR_trans ? writedlm("invcor_$outcov", inv(R)
+    
     #Create MVM distribution from R
 
+    
     mvn = invR_trans ? MvNormal(Matrix(Hermitian(inv(R)))) : MvNormal(R)
     trans = invR_trans ? inv(R) : one(R)
 
