@@ -1,6 +1,6 @@
 #defines the size of each simulation chunk
-const ASPU_NCHUNK = 10^4
-const GIVEUP = 1500
+const ASPU_NCHUNK = 10^5
+const GIVEUP = 900
 
 function spu(z, g::Integer)
     out = 0.0
