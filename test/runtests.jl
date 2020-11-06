@@ -24,6 +24,8 @@ mvn = MvNormal(R)
 aspuobj = JaSPU.init_aspu_par(pows, mvn, 10^5; verbose=false)
 out = JaSPU.getaspu(z, aspuobj..., pows)
 
+out2 = JaSPU.getaspu_new(z, aspuobj..., pows)
+
 # z = [2, -1, 3, 8]
 # JaSPU.getspu(pows, z)
 # getspu(pows, z, 4)

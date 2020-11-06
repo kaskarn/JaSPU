@@ -1,5 +1,6 @@
 #defines the size of each simulation chunk
 const ASPU_NCHUNK = 10^4
+const GIVEUP = 3000
 
 function spu(z, g::Integer)
     out = 0.0
@@ -136,19 +137,31 @@ function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
 end
 
 #function to process a single z-scores vector
-function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
+function getaspu_new(z, allsorted, allranks, maxin_arr, maxin, pows)
     spu = getspu(pows, z)
     pval = zeros(Int, length(pows))
     ind_p = fill(length(allsorted), length(pows))
     i = 0
     B = maxin[1]
-    while minimum(pval) < 850 && i < length(allsorted)
+    while minimum(pval) < GIVEUP && i < length(allsorted)
         i += 1
-        for k in eachindex(pows)
-            pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
-            (ind_p[k] > i && pval[k] > 850) && (ind_p[k] = i)
+        
+        #calculates each SPU
+        for k in eachindex(pows)[pval > GIVEUP]
+          
+          #counts numbers of simulations > SPU
+          pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
+          
+          #if not significant enough, move on from it
+          (pval[k] > GIVEUP) && (ind_p[k] = i)
+          
+          #OLD
+          # pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
+          # (ind_p[k] > i && pval[k] > GIVEUP) && (ind_p[k] = i)
         end
     end
+ 
+    
     minp, gamma = findmin(pval)
     aspu_n = count(x->(x > maxin[i] - minp), allranks[i][2,:])
     aspu_p = (aspu_n + 1) / (B*10^(i-1) + 1)
@@ -157,6 +170,39 @@ function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
     aspu_p, p_out, gamma
 end
 
+#function to process a single z-scores vector
+function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
+    spu = getspu(pows, z)
+    pval = zeros(Int, length(pows))
+    ind_p = fill(length(allsorted), length(pows))
+    i = 0
+    B = maxin[1]
+    while minimum(pval) < GIVEUP && i < length(allsorted)
+        i += 1
+        
+        #calculates each SPU
+        for k in eachindex(pows)[pval > GIVEUP]
+          
+          #counts numbers of simulations > SPU
+          pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
+          
+          #if not significant enough, move on from it
+          (pval[k] > GIVEUP) && (ind_p[k] = i)
+          
+          #OLD
+          # pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
+          # (ind_p[k] > i && pval[k] > GIVEUP) && (ind_p[k] = i)
+        end
+    end
+ 
+    
+    minp, gamma = findmin(pval)
+    aspu_n = count(x->(x > maxin[i] - minp), allranks[i][2,:])
+    aspu_p = (aspu_n + 1) / (B*10^(i-1) + 1)
+    p_out = (pval .+ 1) ./ (B .* 10 .^ (ind_p .- 1) .+ 1)
+
+    aspu_p, p_out, gamma
+end
 # Arguments are passed once through the channel, then workers are started
 function do_aspuwork(vars, jobs, results)
     aspu_obj, pows, delim, trans, na = take!(vars)
@@ -216,10 +262,6 @@ function aspu(
     end
     outcov = string(outdir, "/aspu_z_covariance_", basename(filein))
     nosavecov || (writedlm(outcov, R))
-    
-    
-    writedlm("test_cov", Σ)
-    writedlm("test_invcor", inv(R))
     
     #Create MVM distribution from R
 
