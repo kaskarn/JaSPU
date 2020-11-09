@@ -160,7 +160,7 @@ function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows; giveup = 850)
           pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
           
           #if not significant enough, move on from it
-          (pval[k] > giveup) && (ind_p[k] = i)
+          (pval[k] >= giveup) && (ind_p[k] = i)
           
           #OLD
           # pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
