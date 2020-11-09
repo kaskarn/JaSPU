@@ -114,6 +114,8 @@ function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
     for i in eachindex(allvals)[2:end]
         verbose && println_timestamp("Generating SPUs for 1e-$(Int(log10(nchunk))+i-1)")
         iternow = nchunk*10^(i-1)
+        
+        # the threshold for keeping draws in the current level is the 90% percentile of the previous level
         thresh = [partialsort(view(allvals[i-1],j,:), Int(nchunk*0.10); rev = true) for j in eachindex(pows)]
         fullchunks = floor(Int, iternow/nchunk)
         for chunk in 1:fullchunks
@@ -133,27 +135,32 @@ function init_aspu_par(pows::Vector{Int64}, mvn, maxiter::Int64; verbose = true)
     allsorted = [ [ sort(allvals[i][g,:], rev=true)[1:maxin_arr[g,i]] for g in eachindex(pows) ] for i in eachindex(allvals) ]
 
     verbose && println_timestamp("Simulations initialized")
+    
+    #output objects: all sorted top SPUs, all top draw ranks, #top draws by power, total #top draws
+    
     allsorted, allranks, maxin_arr, maxin
+    #to think about
+    # allsorted, [allranks[i][2,:] for i in eachindex(allranks)], maxin_arr, maxin
 end
 
 #function to process a single z-scores vector
-function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows)
+function getaspu(z, allsorted, allranks, maxin_arr, maxin, pows; giveup = 850)
     spu = getspu(pows, z)
     pval = zeros(Int, length(pows))
     ind_p = fill(length(allsorted), length(pows))
     i = 0
     B = maxin[1]
-    while minimum(pval) < GIVEUP && i < length(allsorted)
+    while minimum(pval) < giveup && i < length(allsorted)
         i += 1
         
         #calculates each SPU
-        for k in eachindex(pows)[pval .< GIVEUP]
+        for k in eachindex(pows)[pval .< giveup]
           
           #counts numbers of simulations > SPU
           pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
           
           #if not significant enough, move on from it
-          (pval[k] > GIVEUP) && (ind_p[k] = i)
+          (pval[k] > giveup) && (ind_p[k] = i)
           
           #OLD
           # pval[k] = sum( spu[k] .< allsorted[i][k][1:maxin_arr[k, i]] )
@@ -198,8 +205,6 @@ function aspu(
     out::AbstractString = "", verbose::Bool = true, nosavecov::Bool = false,
     outtest::Real = Inf
     )
-
-    nchunk = ASPU_NCHUNK
 
     maxiter = Int(10^(ceil(Int, log10(niter))))
     maxiter > niter && println("\nIterations were rounded up to the next power of 10: $maxiter \n")
